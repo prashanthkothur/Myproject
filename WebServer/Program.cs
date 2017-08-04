@@ -9,6 +9,7 @@ using System.Threading;
 using System.Xml.Schema;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
+using System.Web;
 
 namespace WebServer
 {
@@ -72,7 +73,9 @@ namespace WebServer
 
                                 Do_Authentication(ctx.Request, ctx.Response);
 
-                                var twitterFeed =  GetTwitterFeed();
+                                var searchText = string.Empty;
+
+                                var twitterFeed = FetchTwitterFeed(searchText);
 
                                 var buf = Encoding.UTF8.GetBytes(twitterFeed);
                                 ctx.Response.ContentLength64 = buf.Length;
@@ -146,13 +149,16 @@ namespace WebServer
             _listener.Close();
         }
 
-        public string GetTwitterFeed()
+        public string FetchTwitterFeed(string searchText)
         {
             var jsonTwitterFeed = string.Empty;
 
             string query = "salesforce";
+            string resource_url = "https://api.twitter.com/1.1/search/tweets.json?q=from%3Asalesforce{0}&result_type=recent&count=10";
+            //string resource_url = "https://api.twitter.com/1.1/search/tweets.json?q=%40salesforce&src=typd";
 
-            string resource_url = "https://api.twitter.com/1.1/search/tweets.json?q=%40salesforce&src=typd";
+            resource_url = string.Format(resource_url, searchText.Length > 0 ? "%20" + UrlEncode(searchText) : "");
+            
 
 
             //SET the header for twitter call.
@@ -164,7 +170,6 @@ namespace WebServer
             var oauth_consumer_secret = "Q6RVsgvdI5vF5cX3zjW4bFUEQNFnal8aF79rIrTUkglfGJdcSc";// = "insert here...";
             var oauth_consumer_secret_urlencode = "Q6RVsgvdI5vF5cX3zjW4bFUEQNFnal8aF79rIrTUkglfGJdcSc";// = "insert here...";
 
-            
             try
             {
 
@@ -174,49 +179,41 @@ namespace WebServer
                 byte[] byte1 = encoding.GetBytes(postData);
                 var basic_token1 = Base64Encode(oauth_consumerKeY_urlencode + ":" + oauth_consumer_secret_urlencode);
 
-                /*var bearer_token1 =
-                        "ckt1OWg5OWxaREVjMDZkSEozR2hXc3UwQzpRNlJWc2d2ZEk1dkY1Y1gzempXNGJGVUVRTkZuYWw4YUY3OXJJclRVa2dsZkdKZGNTYw==";
-                  */
-                HttpWebRequest request1 = (HttpWebRequest)WebRequest.Create("https://api.twitter.com/oauth2/token?grant_type=client_credentials");
-                request1.Headers.Add("Authorization", "Basic " + basic_token1);
-                request1.Method = "POST";
-                request1.ContentType = "application/x-www-form-urlencoded;charset=UTF-8";
-                var response1 = (HttpWebResponse)request1.GetResponse();
-                var reader1 = new StreamReader(response1.GetResponseStream());
-                var objText1 = reader1.ReadToEnd();
+                
+                HttpWebRequest auth_request = (HttpWebRequest)WebRequest.Create("https://api.twitter.com/oauth2/token?grant_type=client_credentials");
+                auth_request.Headers.Add("Authorization", "Basic " + basic_token1);
+                auth_request.Method = "POST";
+                auth_request.ContentType = "application/x-www-form-urlencoded;charset=UTF-8";
+                var auth_response = (HttpWebResponse)auth_request.GetResponse();
+                var reader1 = new StreamReader(auth_response.GetResponseStream());
+                var auth_responseText = reader1.ReadToEnd();
 
-                var oauth_token1 = JsonConvert.DeserializeObject<oauth_token>(objText1);
-
-
-
-
-
+                var oauth_token1 = JsonConvert.DeserializeObject<oauth_token>(auth_responseText);
 
                 //Get feed from twitter api.
-            HttpWebRequest request = (HttpWebRequest)WebRequest.Create(resource_url);
-            //request.Headers.Add("Authorization", authHeader);
-            request.Headers.Add("Authorization", "bearer " + oauth_token1.access_token);
-            request.Method = "GET";
-            request.ContentType = "application/x-www-form-urlencoded;charset=UTF-8";
+                HttpWebRequest feed_request = (HttpWebRequest)WebRequest.Create(resource_url);
+                feed_request.Headers.Add("Authorization", "bearer " + oauth_token1.access_token);
+                feed_request.Method = "GET";
+                feed_request.ContentType = "application/x-www-form-urlencoded;charset=UTF-8";
 
 
-            var response = (HttpWebResponse)request.GetResponse();
-            var reader = new StreamReader(response.GetResponseStream());
-            var objText = reader.ReadToEnd();
-            //myDiv.InnerHtml = objText;
-            /*string html = "";
+                var feed_response = (HttpWebResponse)feed_request.GetResponse();
+                var reader = new StreamReader(feed_response.GetResponseStream());
+                var objText = reader.ReadToEnd();
+                //myDiv.InnerHtml = objText;
+                /*string html = "";
            
-                 JArray jsonDat = JArray.Parse(objText);
-                  for (int x = 0; x < jsonDat.Count(); x++)
-                  {
-                      //html += jsonDat[x]["id"].ToString() + "<br/>";
-                      html += jsonDat[x]["text"].ToString() + "<br/>";
-                      // html += jsonDat[x]["name"].ToString() + "<br/>";
-                      html += jsonDat[x]["created_at"].ToString() + "<br/>";
+                     JArray jsonDat = JArray.Parse(objText);
+                      for (int x = 0; x < jsonDat.Count(); x++)
+                      {
+                          //html += jsonDat[x]["id"].ToString() + "<br/>";
+                          html += jsonDat[x]["text"].ToString() + "<br/>";
+                          // html += jsonDat[x]["name"].ToString() + "<br/>";
+                          html += jsonDat[x]["created_at"].ToString() + "<br/>";
 
-                  }
-                  //myDiv.InnerHtml = html;
-             * */
+                      }
+                      //myDiv.InnerHtml = html;
+                  */
                 jsonTwitterFeed = objText.ToString();
             }
             catch (Exception ex)
@@ -233,6 +230,11 @@ namespace WebServer
 
         }
 
+        public  string UrlEncode(string plainText)
+        {
+            var urlEncodeText = HttpUtility.UrlEncode(plainText);
+            return urlEncodeText;
+        }
         public static string Base64Encode(string plainText)
         {
             var plainTextBytes = System.Text.Encoding.UTF8.GetBytes(plainText);
@@ -249,7 +251,9 @@ namespace WebServer
 
         private static void Main(string[] args)
         {
-            var ws = new WebServer(SendResponse, "http://localhost:4000/test/");
+            //string[] listofUrls = new string["http://localhost:4000/login/", "http://localhost:4000/TwitterFeed/"];
+
+            var ws = new WebServer(SendResponse, "http://localhost:4000/login/");
             ws.Run();
             Console.WriteLine("A simple webserver. Press a key to quit.");
             Console.ReadKey();
