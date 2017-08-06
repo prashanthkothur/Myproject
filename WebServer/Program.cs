@@ -1,5 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
+using System.Data;
 using System.IO;
 using System.Linq;
 using System.Net;
@@ -43,7 +45,7 @@ namespace WebServer
 
             _responderMethod = method;
             _listener.Start();
-            _listener.AuthenticationSchemes = AuthenticationSchemes.Basic;
+            //_listener.AuthenticationSchemes = AuthenticationSchemes.Anonymous;
 
         }
 
@@ -71,15 +73,19 @@ namespace WebServer
                                     return;
                                 }
 
+                                
                                 Do_Authentication(ctx.Request, ctx.Response);
 
-                                var searchText = string.Empty;
+                                if (ctx.Response.StatusCode != 401)
+                                {
+                                    var searchText = " OR @salesforce";
 
-                                var twitterFeed = FetchTwitterFeed(searchText);
-
-                                var buf = Encoding.UTF8.GetBytes(twitterFeed);
-                                ctx.Response.ContentLength64 = buf.Length;
-                                ctx.Response.OutputStream.Write(buf, 0, buf.Length);
+                                    var twitterFeed = FetchTwitterFeed(searchText);
+                                    Console.WriteLine(twitterFeed);
+                                    var buf = Encoding.UTF8.GetBytes("myJsonMethod(" + twitterFeed +")");
+                                    ctx.Response.ContentLength64 = buf.Length;
+                                    ctx.Response.OutputStream.Write(buf, 0, buf.Length);
+                                }
                             }
                             catch(Exception ex)
                             {
@@ -104,6 +110,12 @@ namespace WebServer
             });
         }
 
+        public void Stop()
+        {
+            _listener.Stop();
+            _listener.Close();
+        }
+
         public void Do_Authentication(HttpListenerRequest request, HttpListenerResponse response)
         {
             string authorization = request.Headers["Authorization"];
@@ -124,12 +136,12 @@ namespace WebServer
                 //HttpListenerContext.Current.User = new BasicPrincipal(username);
                 var rstr = _responderMethod(request);
                 var buf = Encoding.UTF8.GetBytes(rstr);
-                //response.ContentLength64 = buf.Length;
+                response.ContentLength64 = buf.Length;
                 //response.OutputStream.Write(buf, 0, buf.Length);
             }
             else
             {
-                response.AddHeader("WWW-Authenticate", "Basic realm=\"Test\"");
+                response.AddHeader("WWW-Authenticate", "Basic realm=\"login\"");
                 response.StatusCode = 401;
                 //response.End();
                 
@@ -143,18 +155,14 @@ namespace WebServer
         }
 
 
-        public void Stop()
-        {
-            _listener.Stop();
-            _listener.Close();
-        }
+        
 
         public string FetchTwitterFeed(string searchText)
         {
             var jsonTwitterFeed = string.Empty;
 
             string query = "salesforce";
-            string resource_url = "https://api.twitter.com/1.1/search/tweets.json?q=from%3Asalesforce{0}&result_type=recent&count=10";
+            string resource_url = "https://api.twitter.com/1.1/search/tweets.json?q=from%3Asalesforce{0}&result_type=recent&count=100";
             //string resource_url = "https://api.twitter.com/1.1/search/tweets.json?q=%40salesforce&src=typd";
 
             resource_url = string.Format(resource_url, searchText.Length > 0 ? "%20" + UrlEncode(searchText) : "");
@@ -235,6 +243,7 @@ namespace WebServer
             var urlEncodeText = HttpUtility.UrlEncode(plainText);
             return urlEncodeText;
         }
+
         public static string Base64Encode(string plainText)
         {
             var plainTextBytes = System.Text.Encoding.UTF8.GetBytes(plainText);
@@ -253,7 +262,15 @@ namespace WebServer
         {
             //string[] listofUrls = new string["http://localhost:4000/login/", "http://localhost:4000/TwitterFeed/"];
 
-            var ws = new WebServer(SendResponse, "http://localhost:4000/login/");
+            List<string> listUrls = new List<string>();
+            listUrls.Add("http://localhost:4000/login/");
+            listUrls.Add("http://localhost:4000/FetchTwitterFeed/");
+
+
+
+            var ws = new WebServer(SendResponse, listUrls.ToArray());
+            
+            //var ws = new WebServer(SendResponse, "http://localhost:4000/login/");
             ws.Run();
             Console.WriteLine("A simple webserver. Press a key to quit.");
             Console.ReadKey();
