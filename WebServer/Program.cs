@@ -78,7 +78,11 @@ namespace WebServer
 
                                 if (ctx.Response.StatusCode != 401)
                                 {
-                                    var searchText = " OR @salesforce";
+                                    var searchText = string.Empty;
+                                    if (ctx.Request.QueryString.Count > 0)
+                                    {
+                                        searchText = ctx.Request.QueryString["q"];
+                                    }
 
                                     var twitterFeed = FetchTwitterFeed(searchText);
                                     Console.WriteLine(twitterFeed);
@@ -169,7 +173,7 @@ namespace WebServer
             
 
 
-            //SET the header for twitter call.
+            //SET the header for twitter call..
             // oauth application keys
             var oauth_token = "376771251-mSLLbwzPvHNbZnWRkgBNQxUyr43IFAXhvNKL6FvU"; //"insert here...";
             var oauth_token_secret = "1NgsgT1BDu0ZCP4oF1MSZHuIuIte57qLngIMMuowwumLS"; //"insert here...";
