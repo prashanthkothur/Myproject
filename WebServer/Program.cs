@@ -56,6 +56,8 @@ namespace WebServer
 
         public void Run()
         {
+            var _twitterFeedReader = new TwitterFeedReader();
+
             ThreadPool.QueueUserWorkItem(o =>
             {
                 Console.WriteLine("Webserver running...");
@@ -84,7 +86,7 @@ namespace WebServer
                                         searchText = ctx.Request.QueryString["q"];
                                     }
 
-                                    var twitterFeed = FetchTwitterFeed(searchText);
+                                    var twitterFeed = _twitterFeedReader.FetchTwitterFeed(searchText);
                                     Console.WriteLine(twitterFeed);
                                     var buf = Encoding.UTF8.GetBytes("myJsonMethod(" + twitterFeed +")");
                                     ctx.Response.ContentLength64 = buf.Length;
@@ -158,101 +160,6 @@ namespace WebServer
             return (username == "testuser" && password == "testuser");
         }
 
-
-        
-
-        public string FetchTwitterFeed(string searchText)
-        {
-            var jsonTwitterFeed = string.Empty;
-
-            string query = "salesforce";
-            string resource_url = "https://api.twitter.com/1.1/search/tweets.json?q=from%3Asalesforce{0}&result_type=recent&count=100";
-            //string resource_url = "https://api.twitter.com/1.1/search/tweets.json?q=%40salesforce&src=typd";
-
-            resource_url = string.Format(resource_url, searchText.Length > 0 ? "%20" + UrlEncode(searchText) : "");
-            
-
-
-            //SET the header for twitter call..
-            // oauth application keys
-            var oauth_token = "376771251-mSLLbwzPvHNbZnWRkgBNQxUyr43IFAXhvNKL6FvU"; //"insert here...";
-            var oauth_token_secret = "1NgsgT1BDu0ZCP4oF1MSZHuIuIte57qLngIMMuowwumLS"; //"insert here...";
-            var oauth_consumer_key = "rKu9h99lZDEc06dHJ3GhWsu0C";// = "insert here...";
-            var oauth_consumerKeY_urlencode = "rKu9h99lZDEc06dHJ3GhWsu0C";
-            var oauth_consumer_secret = "Q6RVsgvdI5vF5cX3zjW4bFUEQNFnal8aF79rIrTUkglfGJdcSc";// = "insert here...";
-            var oauth_consumer_secret_urlencode = "Q6RVsgvdI5vF5cX3zjW4bFUEQNFnal8aF79rIrTUkglfGJdcSc";// = "insert here...";
-
-            try
-            {
-
-                //Get access_token from twitter oauth api.
-                string postData = "grant_type=client_credentials";
-                ASCIIEncoding encoding = new ASCIIEncoding();
-                byte[] byte1 = encoding.GetBytes(postData);
-                var basic_token1 = Base64Encode(oauth_consumerKeY_urlencode + ":" + oauth_consumer_secret_urlencode);
-
-                
-                HttpWebRequest auth_request = (HttpWebRequest)WebRequest.Create("https://api.twitter.com/oauth2/token?grant_type=client_credentials");
-                auth_request.Headers.Add("Authorization", "Basic " + basic_token1);
-                auth_request.Method = "POST";
-                auth_request.ContentType = "application/x-www-form-urlencoded;charset=UTF-8";
-                var auth_response = (HttpWebResponse)auth_request.GetResponse();
-                var reader1 = new StreamReader(auth_response.GetResponseStream());
-                var auth_responseText = reader1.ReadToEnd();
-
-                var oauth_token1 = JsonConvert.DeserializeObject<oauth_token>(auth_responseText);
-
-                //Get feed from twitter api.
-                HttpWebRequest feed_request = (HttpWebRequest)WebRequest.Create(resource_url);
-                feed_request.Headers.Add("Authorization", "bearer " + oauth_token1.access_token);
-                feed_request.Method = "GET";
-                feed_request.ContentType = "application/x-www-form-urlencoded;charset=UTF-8";
-
-
-                var feed_response = (HttpWebResponse)feed_request.GetResponse();
-                var reader = new StreamReader(feed_response.GetResponseStream());
-                var objText = reader.ReadToEnd();
-                //myDiv.InnerHtml = objText;
-                /*string html = "";
-           
-                     JArray jsonDat = JArray.Parse(objText);
-                      for (int x = 0; x < jsonDat.Count(); x++)
-                      {
-                          //html += jsonDat[x]["id"].ToString() + "<br/>";
-                          html += jsonDat[x]["text"].ToString() + "<br/>";
-                          // html += jsonDat[x]["name"].ToString() + "<br/>";
-                          html += jsonDat[x]["created_at"].ToString() + "<br/>";
-
-                      }
-                      //myDiv.InnerHtml = html;
-                  */
-                jsonTwitterFeed = objText.ToString();
-            }
-            catch (Exception ex)
-            {
-                //myDiv.InnerHtml = html + twit_error.ToString();
-                throw ex;
-            }
-
-
-            //make HTTP request to twitter API to fetch feed.
-
-
-            return jsonTwitterFeed;
-
-        }
-
-        public  string UrlEncode(string plainText)
-        {
-            var urlEncodeText = HttpUtility.UrlEncode(plainText);
-            return urlEncodeText;
-        }
-
-        public static string Base64Encode(string plainText)
-        {
-            var plainTextBytes = System.Text.Encoding.UTF8.GetBytes(plainText);
-            return System.Convert.ToBase64String(plainTextBytes);
-        }
     }
 
     internal class Program
@@ -264,29 +171,16 @@ namespace WebServer
 
         private static void Main(string[] args)
         {
-            //string[] listofUrls = new string["http://localhost:4000/login/", "http://localhost:4000/TwitterFeed/"];
-
             List<string> listUrls = new List<string>();
             listUrls.Add("http://localhost:4000/login/");
             listUrls.Add("http://localhost:4000/FetchTwitterFeed/");
 
-
-
             var ws = new WebServer(SendResponse, listUrls.ToArray());
-            
-            //var ws = new WebServer(SendResponse, "http://localhost:4000/login/");
             ws.Run();
             Console.WriteLine("A simple webserver. Press a key to quit.");
             Console.ReadKey();
             ws.Stop();
         }
-
         
-    }
-
-    public class oauth_token
-    {
-        public string token_type;
-        public string access_token;
     }
 }
